@@ -29,11 +29,26 @@
         .neon-text { text-shadow: 0 0 15px var(--neon-cyan); }
         .currency { font-family: monospace; }
 
-        .transaction-card {
-            transition: all 0.2s ease;
+        /* Mobile First Improvements */
+        @media (max-width: 640px) {
+            .container { padding-left: 1rem; padding-right: 1rem; }
+            .summary-grid { grid-template-columns: 1fr 1fr; gap: 1rem; }
         }
-        .transaction-card:hover {
-            transform: translateX(8px);
+
+        /* Edit Modal Animation */
+        .modal {
+            animation: modalSlideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+        
+        @keyframes modalSlideUp {
+            from {
+                opacity: 0;
+                transform: translateY(80px) scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
         }
     </style>
 </head>
@@ -72,12 +87,12 @@
             </div>
         </div>
 
-        <!-- Add Transaction + Transactions List -->
+        <!-- Add Transaction -->
         <div class="lg:grid lg:grid-cols-12 gap-8">
-            <!-- Add Form -->
             <div class="lg:col-span-5 glass rounded-3xl p-6 sm:p-8 mb-8 lg:mb-0">
                 <h3 class="text-xl sm:text-2xl font-semibold mb-6">নতুন লেনদেন</h3>
                 <form id="transaction-form" onsubmit="addTransaction(event)">
+                    <!-- Form fields same as before but with better mobile spacing -->
                     <div class="space-y-6">
                         <div>
                             <label class="block text-sm mb-2">ধরন</label>
@@ -127,11 +142,6 @@
         </div>
     </div>
 
-    <!-- Footer with Copyright -->
-    <footer class="text-center py-8 text-slate-500 text-xs">
-        © 2026 A. Rahim
-    </footer>
-
     <!-- Detail Modal -->
     <div id="detail-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-xl z-[9999] items-center justify-center">
         <div class="glass max-w-md w-full mx-4 rounded-3xl p-7 modal">
@@ -148,7 +158,7 @@
         </div>
     </div>
 
-    <!-- Edit Modal -->
+    <!-- Edit Modal with Animation -->
     <div id="edit-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-xl z-[9999] items-center justify-center">
         <div class="glass max-w-lg w-full mx-4 rounded-3xl p-8 modal">
             <h3 class="text-2xl font-semibold mb-6">লেনদেন এডিট করুন</h3>
@@ -195,10 +205,6 @@
     </div>
 
     <script>
-        // ... (আগের সব জাভাস্ক্রিপ্ট কোড একই রাখা হয়েছে, শুধু footer যোগ করা হয়েছে)
-        // আপনার আগের কোডের বাকি অংশ এখানে থাকবে। 
-        // যেহেতু পুরো কোড অনেক লম্বা, আমি শুধু নতুন অংশ দেখিয়েছি।
-
         let transactions = [];
         let currentTransaction = null;
         let currentEditingId = null;
@@ -210,8 +216,255 @@
         const incomeCats = ["বেতন", "ফ্রিল্যান্স", "বিনিয়োগ", "বোনাস", "অন্যান্য"];
         const expenseCats = ["খাবার", "যাতায়াত", "বাসা ভাড়া", "বিল", "শপিং", "বিনোদন", "স্বাস্থ্য", "ভ্রমণ", "শিক্ষা", "অন্যান্য"];
 
-        // আগের সব ফাংশন (loadData, saveData, calculateTotals, renderGroupedTransactions, showDetail, openEditModal, saveEditedTransaction ইত্যাদি) একই রাখুন।
-        // শুধু footer যোগ করা হয়েছে।
+        function loadData() {
+            const saved = localStorage.getItem("transactions");
+            if (saved) transactions = JSON.parse(saved);
+        }
+
+        function saveData() {
+            localStorage.setItem("transactions", JSON.stringify(transactions));
+        }
+
+        function calculateTotals() {
+            let income = 0, expense = 0;
+            transactions.forEach(t => {
+                const amt = parseFloat(t.amount);
+                if (t.type === 'income') income += amt;
+                else expense += amt;
+            });
+            const balance = income - expense;
+
+            document.getElementById("total-income").textContent = currency + income.toLocaleString('en-IN');
+            document.getElementById("total-expense").textContent = currency + expense.toLocaleString('en-IN');
+            document.getElementById("current-balance").textContent = currency + Math.abs(balance).toLocaleString('en-IN');
+        }
+
+        function renderGroupedTransactions() {
+            const container = document.getElementById("transactions-container");
+            container.innerHTML = "";
+
+            const grouped = {};
+            transactions.forEach(tx => {
+                if (!grouped[tx.date]) grouped[tx.date] = [];
+                grouped[tx.date].push(tx);
+            });
+
+            const sortedDates = Object.keys(grouped).sort((a, b) => new Date(b) - new Date(a));
+
+            sortedDates.forEach(date => {
+                const dayTx = grouped[date];
+                let dayIncome = 0, dayExpense = 0;
+                dayTx.forEach(tx => {
+                    if (tx.type === 'income') dayIncome += parseFloat(tx.amount);
+                    else dayExpense += parseFloat(tx.amount);
+                });
+
+                const groupDiv = document.createElement("div");
+                groupDiv.className = "mb-10";
+
+                groupDiv.innerHTML = `
+                    <div class="flex justify-between bg-slate-800/60 px-5 py-3 rounded-3xl mb-4">
+                        <p class="font-medium text-sm sm:text-base">${new Date(date).toLocaleDateString('bn-BD', {weekday:'long', day:'numeric', month:'long', year:'numeric'})}</p>
+                        <div class="text-xs sm:text-sm">
+                            <span class="text-emerald-400">+৳${dayIncome}</span>
+                            <span class="text-rose-400 mx-2">-৳${dayExpense}</span>
+                            <span class="text-cyan-400">= ৳${dayIncome - dayExpense}</span>
+                        </div>
+                    </div>
+                `;
+
+                const txList = document.createElement("div");
+                txList.className = "space-y-3";
+
+                dayTx.forEach(tx => {
+                    const isIncome = tx.type === 'income';
+                    const card = document.createElement("div");
+                    card.className = `transaction-card glass rounded-3xl p-5 sm:p-6 flex justify-between items-center cursor-pointer border-l-4 ${isIncome ? 'border-emerald-400' : 'border-rose-400'}`;
+                    card.onclick = () => showDetail(tx);
+                    card.innerHTML = `
+                        <div class="flex-1 min-w-0">
+                            <p class="font-medium truncate">${tx.category}</p>
+                            <p class="text-xs text-slate-400 mt-1 truncate">${tx.note || 'নোট নেই'}</p>
+                        </div>
+                        <div class="text-right ml-4">
+                            <p class="text-xl sm:text-2xl font-mono ${isIncome ? 'text-emerald-400' : 'text-rose-400'}">
+                                ${isIncome ? '+' : '-'}${currency}${parseFloat(tx.amount).toLocaleString('en-IN')}
+                            </p>
+                        </div>
+                    `;
+                    txList.appendChild(card);
+                });
+
+                groupDiv.appendChild(txList);
+                container.appendChild(groupDiv);
+            });
+
+            if (sortedDates.length === 0) {
+                container.innerHTML = `<p class="text-center py-16 text-slate-400">কোনো লেনদেন নেই। উপরে যোগ করুন।</p>`;
+            }
+        }
+
+        function showDetail(tx) {
+            currentTransaction = tx;
+            const modal = document.getElementById("detail-modal");
+            const content = document.getElementById("modal-content");
+            const isIncome = tx.type === 'income';
+
+            content.innerHTML = `
+                <div class="space-y-6 text-sm">
+                    <div class="flex justify-between"><span class="text-slate-400">ধরন</span><span class="${isIncome?'text-emerald-400':'text-rose-400'}">${isIncome?'আয়':'খরচ'}</span></div>
+                    <div class="flex justify-between"><span class="text-slate-400">তারিখ</span><span>${new Date(tx.date).toLocaleDateString('bn-BD', {weekday:'long', day:'numeric', month:'long', year:'numeric'})}</span></div>
+                    <div class="flex justify-between"><span class="text-slate-400">বিভাগ</span><span>${tx.category}</span></div>
+                    <div class="flex justify-between"><span class="text-slate-400">পরিমাণ</span><span class="text-3xl font-mono ${isIncome?'text-emerald-400':'text-rose-400'}">${isIncome?'+':'-'}${currency}${parseFloat(tx.amount).toLocaleString('en-IN')}</span></div>
+                    <div><span class="text-slate-400 block mb-2">নোট</span><p class="bg-slate-900/50 p-5 rounded-2xl">${tx.note || 'কোনো নোট নেই'}</p></div>
+                </div>
+            `;
+            modal.classList.remove("hidden");
+            modal.classList.add("flex");
+        }
+
+        function closeDetailModal() {
+            const modal = document.getElementById("detail-modal");
+            modal.classList.add("hidden");
+            modal.classList.remove("flex");
+        }
+
+        function openEditModal() {
+            closeDetailModal();
+            if (!currentTransaction) return;
+
+            currentEditingId = currentTransaction.id;
+            const editModal = document.getElementById("edit-modal");
+
+            setEditType(currentTransaction.type);
+            document.getElementById("edit-amount").value = currentTransaction.amount;
+            document.getElementById("edit-date").value = currentTransaction.date;
+            document.getElementById("edit-note").value = currentTransaction.note || "";
+
+            updateEditCategorySelect(currentTransaction.type);
+
+            editModal.classList.remove("hidden");
+            editModal.classList.add("flex");
+        }
+
+        function setEditType(type) {
+            document.getElementById("edit-btn-income").classList.toggle("bg-emerald-500", type === "income");
+            document.getElementById("edit-btn-expense").classList.toggle("bg-rose-500", type === "expense");
+            updateEditCategorySelect(type);
+        }
+
+        function updateEditCategorySelect(type) {
+            const select = document.getElementById("edit-category");
+            select.innerHTML = "";
+            const cats = type === "income" ? incomeCats : expenseCats;
+            cats.forEach(cat => {
+                const opt = document.createElement("option");
+                opt.value = cat;
+                opt.textContent = cat;
+                if (cat === currentTransaction.category) opt.selected = true;
+                select.appendChild(opt);
+            });
+        }
+
+        function closeEditModal() {
+            const modal = document.getElementById("edit-modal");
+            modal.classList.add("hidden");
+            modal.classList.remove("flex");
+        }
+
+        function saveEditedTransaction() {
+            if (!currentEditingId) return;
+
+            const tx = transactions.find(t => t.id === currentEditingId);
+            if (!tx) return;
+
+            tx.type = document.getElementById("edit-btn-income").classList.contains("bg-emerald-500") ? "income" : "expense";
+            tx.amount = parseFloat(document.getElementById("edit-amount").value);
+            tx.category = document.getElementById("edit-category").value;
+            tx.date = document.getElementById("edit-date").value;
+            tx.note = document.getElementById("edit-note").value.trim();
+
+            saveData();
+            calculateTotals();
+            renderGroupedTransactions();
+            closeEditModal();
+            showToast("লেনদেন আপডেট হয়েছে ✓");
+        }
+
+        function deleteCurrentTransaction() {
+            if (!currentTransaction) return;
+            if (confirm("এই লেনদেনটি স্থায়ীভাবে মুছে ফেলবেন?")) {
+                transactions = transactions.filter(t => t.id !== currentTransaction.id);
+                saveData();
+                calculateTotals();
+                renderGroupedTransactions();
+                closeDetailModal();
+                showToast("লেনদেন মুছে ফেলা হয়েছে");
+            }
+        }
+
+        function addTransaction(e) {
+            e.preventDefault();
+            const amount = parseFloat(document.getElementById("amount").value);
+            if (!amount) return;
+
+            const newTx = {
+                id: Date.now(),
+                type: currentType,
+                amount: amount,
+                category: document.getElementById("category").value,
+                date: document.getElementById("date").value || new Date().toISOString().split('T')[0],
+                note: document.getElementById("note").value.trim()
+            };
+
+            transactions.unshift(newTx);
+            saveData();
+            calculateTotals();
+            renderGroupedTransactions();
+
+            e.target.reset();
+            showToast("লেনদেন যোগ হয়েছে");
+        }
+
+        function setType(type) {
+            currentType = type;
+            document.getElementById("btn-income").classList.toggle("bg-emerald-500", type === "income");
+            document.getElementById("btn-expense").classList.toggle("bg-rose-500", type === "expense");
+
+            const select = document.getElementById("category");
+            select.innerHTML = "";
+            const cats = type === "income" ? incomeCats : expenseCats;
+            cats.forEach(cat => {
+                const opt = document.createElement("option");
+                opt.value = cat;
+                opt.textContent = cat;
+                select.appendChild(opt);
+            });
+        }
+
+        function showToast(msg) {
+            const toast = document.createElement("div");
+            toast.className = "fixed bottom-6 left-1/2 -translate-x-1/2 glass px-8 py-3.5 rounded-3xl text-sm shadow-2xl z-[999]";
+            toast.textContent = msg;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 2500);
+        }
+
+        function toggleTheme() {
+            currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            document.documentElement.classList.toggle('dark', currentTheme === 'dark');
+            document.documentElement.classList.toggle('light', currentTheme === 'light');
+            document.getElementById("theme-btn").textContent = currentTheme === 'dark' ? '☀️' : '🌙';
+        }
+
+        function toggleLanguage() {
+            currentLang = currentLang === 'bn' ? 'en' : 'bn';
+            document.getElementById("lang-btn").textContent = currentLang === 'bn' ? 'EN' : 'বাংলা';
+        }
+
+        function exportToPDF() {
+            alert("PDF রিপোর্ট তৈরি হচ্ছে...");
+        }
 
         function init() {
             loadData();
