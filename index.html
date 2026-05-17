@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0f172a">
+    <title>Expense Tracker By Abdur Rahim</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Bengali:wght@400;500;600;700&display=swap');
+        
+        * { transition: all 0.3s ease; font-family: 'Inter', 'Noto Sans Bengali', sans-serif; }
+        
+        body { background-color: #0f172a; color: white; }
+
+        .glass-input {
+            background: rgba(30, 41, 59, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 1.5rem;
+            color: white;
+            outline: none;
+        }
+
+        .summary-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 1.5rem;
+        }
+
+        .btn-gradient {
+            background: linear-gradient(90deg, #22d3ee 0%, #a855f7 100%);
+            border-radius: 2rem;
+            color: black;
+            font-weight: bold;
+        }
+
+        .type-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 1.5rem;
+        }
+
+        .active-expense { background-color: #ef4444 !important; color: white !important; }
+        .active-income { background-color: #10b981 !important; color: white !important; }
+
+        .modal-up { animation: slideUp 0.4s ease-out; }
+        @keyframes slideUp { from { transform: translateY(100px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    </style>
+</head>
+<body class="min-h-screen pb-10">
+
+    <!-- Navbar -->
+    <nav class="sticky top-0 z-50 bg-[#0f172a]/80 backdrop-blur-md border-b border-white/5">
+        <div class="max-w-4xl mx-auto px-6 py-4 flex justify-between items-center">
+            <div class="flex items-center gap-4">
+                <button onclick="openProfileModal()" class="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-blue-400 border border-blue-400/30">👤</button>
+                <div class="bg-slate-800/50 px-3 py-1 rounded-full flex items-center gap-2 border border-emerald-500/20">
+                    <span class="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span id="live-count" class="text-[10px] font-bold text-emerald-400 tracking-wider">Loading...</span>
+                </div>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="exportToPDF()" class="bg-slate-800 px-4 py-2 rounded-xl text-xs font-bold border border-white/10">📄 PDF</button>
+                <button onclick="toggleLanguage()" id="lang-btn" class="bg-slate-800 px-4 py-2 rounded-xl text-xs font-bold border border-white/10">EN</button>
+                <button onclick="toggleTheme()" id="theme-btn" class="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center border border-yellow-500/20 text-yellow-400">🌙</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-4xl mx-auto px-6 pt-8">
+        
+        <h2 id="greeting" class="text-2xl font-bold mb-6"></h2>
+
+        <!-- Summary Section (Moved to TOP) -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+            <div class="summary-card p-6 border-l-4 border-emerald-500">
+                <p class="text-[10px] uppercase font-bold opacity-50 tracking-widest">মোট আয়</p>
+                <p id="total-income" class="text-3xl font-bold mt-1 text-emerald-400">৳0</p>
+            </div>
+            <div class="summary-card p-6 border-l-4 border-rose-500">
+                <p class="text-[10px] uppercase font-bold opacity-50 tracking-widest">মোট খরচ</p>
+                <p id="total-expense" class="text-3xl font-bold mt-1 text-rose-400">৳0</p>
+            </div>
+            <div class="summary-card p-6 border-l-4 border-cyan-500">
+                <p class="text-[10px] uppercase font-bold opacity-50 tracking-widest">ব্যালেন্স</p>
+                <p id="current-balance" class="text-3xl font-bold mt-1 text-cyan-400">৳0</p>
+            </div>
+        </div>
+
+        <!-- Main Form (Styled like Screenshot) -->
+        <div class="bg-[#1e293b]/30 p-6 rounded-[2.5rem] border border-white/5 mb-10">
+            <h3 class="text-lg font-bold mb-6 opacity-90">নতুন লেনদেন যোগ করুন</h3>
+            <form onsubmit="addTransaction(event)" class="space-y-6">
+                <div>
+                    <label class="block text-xs mb-3 opacity-50 uppercase tracking-widest">ধরন</label>
+                    <div class="flex gap-2 bg-slate-900/50 p-2 rounded-[2rem]">
+                        <button type="button" id="btn-income" onclick="setType('income')" class="flex-1 py-4 type-btn font-bold">আয়</button>
+                        <button type="button" id="btn-expense" onclick="setType('expense')" class="flex-1 py-4 type-btn font-bold">খরচ</button>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs mb-3 opacity-50 uppercase tracking-widest">পরিমাণ (৳)</label>
+                    <div class="relative">
+                        <span class="absolute left-6 top-1/2 -translate-y-1/2 text-2xl opacity-20">৳</span>
+                        <input id="amount" type="number" step="0.01" placeholder="0.00" class="w-full glass-input py-6 pl-14 pr-6 text-4xl font-mono" required>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs mb-3 opacity-50 uppercase tracking-widest">বিভাগ</label>
+                    <select id="category" class="w-full glass-input py-5 px-6 appearance-none"></select>
+                </div>
+
+                <div class="flex gap-4">
+                    <div class="flex-1">
+                        <label class="block text-xs mb-3 opacity-50 uppercase tracking-widest">তারিখ</label>
+                        <input id="date" type="date" class="w-full glass-input py-5 px-6">
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-xs mb-3 opacity-50 uppercase tracking-widest">নোট</label>
+                        <input id="note" type="text" placeholder="নোট লিখুন" class="w-full glass-input py-5 px-6">
+                    </div>
+                </div>
+
+                <button type="submit" class="w-full py-6 btn-gradient text-xl shadow-lg shadow-cyan-500/20 active:scale-95">
+                    লেনদেন যোগ করুন
+                </button>
+            </form>
+        </div>
+
+        <!-- Transaction List -->
+        <div id="transactions-container" class="space-y-4"></div>
+    </div>
+
+    <!-- Modals -->
+    <div id="profile-modal" class="hidden fixed inset-0 bg-black/90 z-[100] items-center justify-center p-6">
+        <div class="bg-slate-900 w-full max-w-sm p-8 rounded-[2rem] border border-white/10 modal-up">
+            <h3 class="text-xl font-bold mb-6">আপনার নাম</h3>
+            <input id="profile-name-input" type="text" class="w-full glass-input py-4 px-6 mb-6">
+            <div class="flex gap-4">
+                <button onclick="closeProfileModal()" class="flex-1 py-4 rounded-xl border border-white/10">বাতিল</button>
+                <button onclick="saveProfileName()" class="flex-1 py-4 rounded-xl bg-blue-500 text-black font-bold">সংরক্ষণ</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="detail-modal" class="hidden fixed inset-0 bg-black/90 z-[100] items-center justify-center p-6">
+        <div class="bg-slate-900 w-full max-w-md p-8 rounded-[2rem] border border-white/10 modal-up">
+            <h3 class="text-xl font-bold mb-6">বিস্তারিত</h3>
+            <div id="modal-content" class="space-y-4"></div>
+            <div class="flex gap-4 mt-8">
+                <button onclick="deleteCurrentTransaction()" class="flex-1 py-4 rounded-xl bg-rose-500/20 text-rose-500 font-bold">ডিলিট</button>
+                <button onclick="openEditModal()" class="flex-1 py-4 rounded-xl bg-cyan-400 text-black font-bold">এডিট</button>
+                <button onclick="closeDetailModal()" class="px-4 py-4 rounded-xl border border-white/10 text-xs">বন্ধ</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="edit-modal" class="hidden fixed inset-0 bg-black/90 z-[100] items-center justify-center p-6">
+        <div class="bg-slate-900 w-full max-w-lg p-8 rounded-[2rem] border border-white/10 modal-up">
+            <h3 class="text-xl font-bold mb-6">এডিট করুন</h3>
+            <div class="space-y-4">
+                <div class="flex gap-2 bg-slate-800 p-2 rounded-2xl">
+                    <button type="button" id="edit-btn-income" onclick="setEditType('income')" class="flex-1 py-3 rounded-xl">আয়</button>
+                    <button type="button" id="edit-btn-expense" onclick="setEditType('expense')" class="flex-1 py-3 rounded-xl">খরচ</button>
+                </div>
+                <input id="edit-amount" type="number" step="0.01" class="w-full glass-input py-4 px-6 text-xl">
+                <select id="edit-category" class="w-full glass-input py-4 px-6"></select>
+                <input id="edit-date" type="date" class="w-full glass-input py-4 px-6">
+                <input id="edit-note" type="text" class="w-full glass-input py-4 px-6">
+            </div>
+            <div class="flex gap-4 mt-8">
+                <button onclick="closeEditModal()" class="flex-1 py-4 rounded-xl border border-white/10">বাতিল</button>
+                <button onclick="saveEditedTransaction()" class="flex-1 py-4 rounded-xl bg-emerald-500 text-black font-bold">সেভ</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // FIREBASE SETUP
+        const firebaseConfig = { 
+            apiKey: "AIzaSyAgT8Da6KcV3KVcX_oIq4bbBwMWoXgGQoE", 
+            authDomain: "sahokher-jinis.firebaseapp.com", 
+            databaseURL: "https://sahokher-jinis-default-rtdb.firebaseio.com", 
+            projectId: "sahokher-jinis", 
+            storageBucket: "sahokher-jinis.firebasestorage.app", 
+            messagingSenderId: "2153850751", 
+            appId: "1:2153850751:web:bec13835cbc88cd44a5c4a" 
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        function initRealtimeVisitors() {
+            const myConnectionsRef = db.ref('status/connections');
+            const connectedRef = db.ref('.info/connected');
+            connectedRef.on('value', (snap) => { if (snap.val()) { const con = myConnectionsRef.push(true); con.onDisconnect().remove(); } });
+            myConnectionsRef.on('value', (snap) => { document.getElementById('live-count').textContent = `${snap.numChildren() || 0} ${currentLang === 'bn' ? 'লাইভ' : 'LIVE'}`; });
+        }
+
+        // APP STATE
+        let transactions = JSON.parse(localStorage.getItem("transactions")) || [];
+        let currentTransaction = null;
+        let currentType = 'expense', editType = 'expense';
+        let currentLang = localStorage.getItem('lang') || 'bn', currentTheme = 'dark';
+
+        const catsMap = {
+            income: [
+                { bn: "বেতন", en: "Salary" }, { bn: "ফ্রিল্যান্স", en: "Freelance" },
+                { bn: "বিনিয়োগ", en: "Investment" }, { bn: "বোনাস", en: "Bonus" }, { bn: "অন্যান্য", en: "Others" }
+            ],
+            expense: [
+                { bn: "বাজার", en: "Groceries" }, { bn: "যাতায়াত", en: "Transport" },
+                { bn: "বাসা ভাড়া", en: "Rent" }, { bn: "বিল", en: "Bills" },
+                { bn: "শপিং", en: "Shopping" }, { bn: "বিনোদন", en: "Entertainment" },
+                { bn: "স্বাস্থ্য", en: "Health" }, { bn: "ভ্রমণ", en: "Travel" },
+                { bn: "শিক্ষা", en: "Education" }, { bn: "অন্যান্য", en: "Others" }
+            ]
+        };
+
+        function setType(t) {
+            currentType = t;
+            document.getElementById("btn-income").className = `flex-1 py-4 type-btn font-bold ${t==='income'?'active-income':''}`;
+            document.getElementById("btn-expense").className = `flex-1 py-4 type-btn font-bold ${t==='expense'?'active-expense':''}`;
+            fillCats("category", t);
+        }
+
+        function setEditType(t) {
+            editType = t;
+            document.getElementById("edit-btn-income").className = `flex-1 py-3 rounded-xl ${t==='income'?'active-income':''}`;
+            document.getElementById("edit-btn-expense").className = `flex-1 py-3 rounded-xl ${t==='expense'?'active-expense':''}`;
+            fillCats("edit-category", t);
+        }
+
+        function fillCats(id, t) {
+            const sel = document.getElementById(id); sel.innerHTML = "";
+            catsMap[t].forEach(c => { const o = document.createElement("option"); o.value = c.bn; o.textContent = c[currentLang]; sel.appendChild(o); });
+        }
+
+        function addTransaction(e) {
+            e.preventDefault();
+            transactions.unshift({
+                id: Date.now(), type: currentType, amount: document.getElementById("amount").value,
+                category: document.getElementById("category").value,
+                date: document.getElementById("date").value || new Date().toISOString().split('T')[0],
+                note: document.getElementById("note").value
+            });
+            saveAndRender(); e.target.reset();
+        }
+
+        function render() {
+            const container = document.getElementById("transactions-container"); container.innerHTML = "";
+            const grouped = {}; transactions.forEach(tx => { if (!grouped[tx.date]) grouped[tx.date] = []; grouped[tx.date].push(tx); });
+            Object.keys(grouped).sort((a,b) => new Date(b) - new Date(a)).forEach(date => {
+                let dIn = 0, dEx = 0; grouped[date].forEach(t => t.type === 'income' ? dIn += parseFloat(t.amount) : dEx += parseFloat(t.amount));
+                const gDiv = document.createElement("div");
+                const head = document.createElement("div"); 
+                head.className = "bg-slate-900/40 px-5 py-5 rounded-[1.5rem] flex justify-between items-center cursor-pointer border border-white/5 mb-2";
+                head.innerHTML = `<div><p class="font-bold text-sm opacity-80">${date}</p></div><div class="font-mono text-[10px] sm:text-xs"><span class="text-emerald-400 font-bold">+${dIn}</span> <span class="text-rose-400 font-bold ml-1">-${dEx}</span> <span class="bg-cyan-500/20 text-cyan-400 px-2 py-1 rounded-lg ml-1 font-bold">= ${dIn-dEx}</span></div>`;
+                const list = document.createElement("div"); list.className = "space-y-2 hidden mb-6";
+                head.onclick = () => list.classList.toggle("hidden");
+                grouped[date].forEach(tx => {
+                    const card = document.createElement("div"); 
+                    card.className = "bg-slate-800/30 p-5 rounded-2xl flex justify-between items-center border-l-4 " + (tx.type==='income'?'border-emerald-500':'border-rose-500');
+                    card.onclick = () => showDetail(tx);
+                    card.innerHTML = `<div><p class="font-bold text-sm">${getCat(tx.category)}</p><p class="text-[10px] opacity-40">${tx.note||''}</p></div><p class="font-mono font-bold ${tx.type==='income'?'text-emerald-400':'text-rose-400'}">${tx.type==='income'?'+':'-'}${tx.amount}</p>`;
+                    list.appendChild(card);
+                });
+                gDiv.appendChild(head); gDiv.appendChild(list); container.appendChild(gDiv);
+            });
+        }
+
+        function openEditModal() {
+            closeDetailModal();
+            document.getElementById("edit-amount").value = currentTransaction.amount;
+            document.getElementById("edit-date").value = currentTransaction.date;
+            document.getElementById("edit-note").value = currentTransaction.note || "";
+            setEditType(currentTransaction.type);
+            document.getElementById("edit-category").value = currentTransaction.category;
+            document.getElementById("edit-modal").classList.replace('hidden', 'flex');
+        }
+
+        function saveEditedTransaction() {
+            const idx = transactions.findIndex(t => t.id === currentTransaction.id);
+            if (idx !== -1) {
+                transactions[idx] = { ...transactions[idx], type: editType, amount: document.getElementById("edit-amount").value, category: document.getElementById("edit-category").value, date: document.getElementById("edit-date").value, note: document.getElementById("edit-note").value };
+                saveAndRender(); closeEditModal();
+            }
+        }
+
+        function exportToPDF() {
+            const pdfRoot = document.createElement('div');
+            pdfRoot.style.padding = "40px"; pdfRoot.style.background = "#fff"; pdfRoot.style.color = "#000";
+            let iT = 0, eT = 0; transactions.forEach(t => t.type==='income'?iT+=parseFloat(t.amount):eT+=parseFloat(t.amount));
+            let rows = ''; [...transactions].sort((a,b)=>new Date(b.date)-new Date(a.date)).forEach(t=>{
+                rows += `<tr style="border-bottom:1px solid #eee"><td style="padding:10px">${t.date}</td><td style="padding:10px">${getCat(t.category)}</td><td style="padding:10px">${t.note||'-'}</td><td style="padding:10px;text-align:right;color:${t.type==='income'?'green':'red'}">${t.type==='income'?'+':'-'}৳${t.amount}</td></tr>`;
+            });
+            pdfRoot.innerHTML = `<h1 style="text-align:center;color:#0ea5e9">Expense Tracker</h1><div style="display:flex;justify-content:space-between;background:#f3f4f6;padding:20px;border-radius:10px;margin-bottom:20px"><div>Income: <b>৳${iT}</b></div><div>Expense: <b>৳${eT}</b></div><div>Balance: <b>৳${iT-eT}</b></div></div><table style="width:100%;border-collapse:collapse"><thead><tr style="background:#eee"><th>Date</th><th>Category</th><th>Note</th><th style="text-align:right">Amount</th></tr></thead><tbody>${rows}</tbody></table>`;
+            html2pdf().set({ margin: 10, filename: 'Report.pdf', jsPDF: { format: 'a4' } }).from(pdfRoot).save();
+        }
+
+        // UTILS
+        function getCat(n) { const f = catsMap.income.concat(catsMap.expense).find(c => c.bn === n || c.en === n); return f ? f[currentLang] : n; }
+        function openProfileModal() { document.getElementById('profile-name-input').value = localStorage.getItem('userName') || ''; document.getElementById('profile-modal').classList.replace('hidden', 'flex'); }
+        function closeProfileModal() { document.getElementById('profile-modal').classList.replace('flex', 'hidden'); }
+        function saveProfileName() { const n = document.getElementById('profile-name-input').value.trim(); if(n) localStorage.setItem('userName', n); closeProfileModal(); updateUILanguage(); }
+        function showDetail(tx) { currentTransaction = tx; document.getElementById("modal-content").innerHTML = `<div class="space-y-4"><p class="opacity-50 text-xs">বিভাগ</p><p class="font-bold">${getCat(tx.category)}</p><p class="opacity-50 text-xs">পরিমাণ</p><p class="font-mono text-xl font-bold">৳${tx.amount}</p><p class="opacity-50 text-xs">নোট</p><p class="italic text-sm">${tx.note || '-'}</p></div>`; document.getElementById("detail-modal").classList.replace('hidden', 'flex'); }
+        function closeDetailModal() { document.getElementById("detail-modal").classList.replace('flex', 'hidden'); }
+        function closeEditModal() { document.getElementById("edit-modal").classList.replace('flex', 'hidden'); }
+        function deleteCurrentTransaction() { if(confirm("ডিলিট করবেন?")) { transactions = transactions.filter(t => t.id !== currentTransaction.id); saveAndRender(); closeDetailModal(); } }
+        function toggleLanguage() { currentLang = currentLang === 'bn' ? 'en' : 'bn'; localStorage.setItem('lang', currentLang); updateUILanguage(); }
+        function saveAndRender() { localStorage.setItem("transactions", JSON.stringify(transactions)); calculate(); render(); }
+        function calculate() {
+            let i = 0, e = 0; transactions.forEach(t => t.type === 'income' ? i += parseFloat(t.amount) : e += parseFloat(t.amount));
+            document.getElementById("total-income").textContent = "৳" + i.toLocaleString();
+            document.getElementById("total-expense").textContent = "৳" + e.toLocaleString();
+            document.getElementById("current-balance").textContent = "৳" + (i - e).toLocaleString();
+        }
+        function getDynamicGreeting() {
+            let name = localStorage.getItem('userName') || (currentLang === 'bn' ? 'ব্যবহারকারী' : 'User');
+            const hour = new Date().getHours();
+            let msg = hour < 12 ? (currentLang==='bn'?"শুভ সকাল":"Good Morning") : hour < 18 ? (currentLang==='bn'?"শুভ দুপুর":"Good Afternoon") : (currentLang==='bn'?"শুভ রাত্রি":"Good Night");
+            return `${msg}, ${name}`;
+        }
+        function updateUILanguage() { calculate(); render(); setType(currentType); document.getElementById("greeting").textContent = getDynamicGreeting(); }
+
+        window.onload = () => { updateUILanguage(); initRealtimeVisitors(); setType('expense'); };
+    </script>
+</body>
+</html>
