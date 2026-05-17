@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0f172a">
+    <title>Expense Tracker By Abdur Rahim</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Bengali:wght@400;500;600;700&display=swap');
+        
+        * { transition: all 0.2s ease; font-family: 'Inter', 'Noto Sans Bengali', sans-serif; }
+        
+        body { background-color: #0f172a; color: white; min-height: 100vh; }
+        body.light-mode { background-color: #f1f5f9; color: #1e293b; }
+
+        /* Summary Card Style exactly like screenshot */
+        .summary-card {
+            background: rgba(30, 41, 59, 0.4);
+            border-radius: 2.5rem;
+            padding: 1.5rem 2rem;
+            border: 2px solid transparent;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        body.light-mode .summary-card { background: white; border-color: #e2e8f0; border-width: 1px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+
+        .card-income { border-color: #10b981; color: #10b981; }
+        .card-expense { border-color: #f43f5e; color: #f43f5e; }
+        .card-balance { border-color: #22d3ee; color: #22d3ee; }
+
+        .glass-card { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 1.5rem; }
+        body.light-mode .glass-card { background: white; border: 1px solid #e2e8f0; }
+
+        .glass-input { background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 1rem; color: white; outline: none; }
+        body.light-mode .glass-input { background: #f8fafc; border: 1px solid #cbd5e1; color: #1e293b; }
+
+        .btn-gradient { background: linear-gradient(90deg, #22d3ee 0%, #a855f7 100%); color: black; font-weight: bold; border-radius: 2rem; }
+        
+        .date-header { 
+            background: rgba(30, 41, 59, 0.3); 
+            border: 1px solid rgba(255, 255, 255, 0.05); 
+            border-radius: 1.5rem; 
+            padding: 12px 20px; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            margin-bottom: 8px; 
+        }
+        body.light-mode .date-header { background: #e2e8f0; border-color: #cbd5e1; color: #1e293b; }
+
+        .balance-badge { background: rgba(34, 211, 238, 0.15); color: #22d3ee; padding: 4px 12px; border-radius: 10px; font-weight: bold; }
+        .active-expense { background-color: #ef4444 !important; color: white !important; }
+        .active-income { background-color: #10b981 !important; color: white !important; }
+
+        .modal-up { animation: slideUp 0.3s ease-out; }
+        @keyframes slideUp { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    </style>
+</head>
+<body class="pb-20">
+
+    <nav class="sticky top-0 z-50 bg-[#0f172a]/80 backdrop-blur-md border-b border-white/5" id="navbar">
+        <div class="max-w-4xl mx-auto px-6 py-4 flex justify-between items-center">
+            <div class="flex items-center gap-4">
+                <button onclick="openProfileModal()" class="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-blue-400 border border-blue-400/30">👤</button>
+                <div class="bg-slate-800/50 px-3 py-1 rounded-full flex items-center gap-2 border border-emerald-500/20">
+                    <span class="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span id="live-count" class="text-[10px] font-bold text-emerald-400 tracking-wider">...</span>
+                </div>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="exportToPDF()" id="txt-pdf" class="bg-slate-800 text-white px-4 py-2 rounded-xl text-xs font-bold border border-white/10">📄 PDF</button>
+                <button onclick="toggleLanguage()" id="lang-btn" class="bg-slate-800 text-white px-4 py-2 rounded-xl text-xs font-bold border border-white/10">EN</button>
+                <button onclick="toggleTheme()" id="theme-btn" class="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center border border-yellow-500/20 text-yellow-400">🌙</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-4xl mx-auto px-6 pt-8">
+        <h2 id="greeting" class="text-2xl font-bold mb-8"></h2>
+
+        <!-- Summary -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-10">
+            <div class="summary-card card-income">
+                <p id="txt-inc-lbl" class="text-[11px] font-bold opacity-70 uppercase tracking-widest mb-1"></p>
+                <p class="text-4xl font-bold">৳<span id="total-income">0</span></p>
+            </div>
+            <div class="summary-card card-expense">
+                <p id="txt-exp-lbl" class="text-[11px] font-bold opacity-70 uppercase tracking-widest mb-1"></p>
+                <p class="text-4xl font-bold">৳<span id="total-expense">0</span></p>
+            </div>
+            <div class="summary-card card-balance">
+                <p id="txt-bal-lbl" class="text-[11px] font-bold opacity-70 uppercase tracking-widest mb-1"></p>
+                <p class="text-4xl font-bold">৳<span id="current-balance">0</span></p>
+            </div>
+        </div>
+
+        <div class="glass-card p-6 mb-10">
+            <h3 id="txt-chart-lbl" class="text-sm font-bold mb-4 opacity-50 uppercase tracking-widest"></h3>
+            <canvas id="expenseChart" height="140"></canvas>
+        </div>
+
+        <!-- Add Transaction Form -->
+        <div class="glass-card p-8 mb-12">
+            <h3 id="txt-form-title" class="text-lg font-bold mb-6 opacity-90"></h3>
+            <form onsubmit="addTransaction(event)" class="space-y-6">
+                <div>
+                    <label id="txt-type-lbl" class="block text-xs mb-2 opacity-50 uppercase tracking-widest font-bold"></label>
+                    <div class="flex gap-2 bg-slate-900/30 p-2 rounded-[2rem] border border-white/5">
+                        <button type="button" id="btn-income" onclick="setType('income')" class="flex-1 py-3 rounded-[1.5rem] font-bold transition-all"></button>
+                        <button type="button" id="btn-expense" onclick="setType('expense')" class="flex-1 py-3 rounded-[1.5rem] font-bold transition-all"></button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div>
+                        <label id="lbl-amount" class="block text-xs mb-2 opacity-50 uppercase font-bold ml-2"></label>
+                        <input id="amount" type="number" step="0.01" class="w-full glass-input py-5 px-6 text-2xl font-mono" required placeholder="৳">
+                    </div>
+                    <div>
+                        <label id="lbl-category" class="block text-xs mb-2 opacity-50 uppercase font-bold ml-2"></label>
+                        <select id="category" class="w-full glass-input py-5 px-6 appearance-none"></select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div>
+                        <label id="lbl-date" class="block text-xs mb-2 opacity-50 uppercase font-bold ml-2"></label>
+                        <input id="date" type="date" class="w-full glass-input py-5 px-6">
+                    </div>
+                    <div>
+                        <label id="lbl-note" class="block text-xs mb-2 opacity-50 uppercase font-bold ml-2"></label>
+                        <input id="note" type="text" class="w-full glass-input py-5 px-6" placeholder="...">
+                    </div>
+                </div>
+                <button type="submit" id="txt-submit-btn" class="w-full py-6 btn-gradient text-lg active:scale-95 shadow-xl shadow-cyan-500/10"></button>
+            </form>
+        </div>
+
+        <h3 id="txt-history-title" class="text-xl font-bold mb-6 px-2"></h3>
+        <div id="history-container" class="space-y-10"></div>
+    </div>
+
+    <!-- Modals -->
+    <div id="detail-modal" class="hidden fixed inset-0 bg-black/80 z-[100] items-center justify-center p-6 backdrop-blur-md">
+        <div class="glass-card w-full max-w-md p-8 modal-up border border-white/10">
+            <h3 id="txt-det-head" class="text-xl font-bold mb-6"></h3>
+            <div id="modal-content" class="space-y-4"></div>
+            <div class="flex gap-4 mt-8">
+                <button onclick="deleteCurrentTransaction()" id="txt-det-del" class="flex-1 py-4 rounded-xl bg-rose-500/20 text-rose-500 font-bold hover:bg-rose-500 hover:text-white transition-all"></button>
+                <button onclick="openEditModal()" id="txt-det-edit" class="flex-1 py-4 rounded-xl bg-cyan-400 text-black font-bold"></button>
+                <button onclick="closeDetailModal()" id="txt-det-close" class="px-4 py-4 rounded-xl border border-white/10 text-xs text-white"></button>
+            </div>
+        </div>
+    </div>
+
+    <div id="edit-modal" class="hidden fixed inset-0 bg-black/90 z-[110] items-center justify-center p-6 backdrop-blur-md">
+        <div class="glass-card w-full max-w-lg p-8 modal-up">
+            <h3 id="txt-ed-head" class="text-xl font-bold mb-6"></h3>
+            <div class="space-y-4">
+                <div class="flex gap-2 bg-slate-800 p-2 rounded-2xl">
+                    <button type="button" id="ed-btn-inc" onclick="setEditType('income')" class="flex-1 py-3 rounded-xl font-bold"></button>
+                    <button type="button" id="ed-btn-exp" onclick="setEditType('expense')" class="flex-1 py-3 rounded-xl font-bold"></button>
+                </div>
+                <input id="ed-amount" type="number" step="0.01" class="w-full glass-input py-4 px-6 text-xl">
+                <select id="ed-category" class="w-full glass-input py-4 px-6"></select>
+                <input id="ed-date" type="date" class="w-full glass-input py-4 px-6">
+                <input id="ed-note" type="text" class="w-full glass-input py-4 px-6">
+            </div>
+            <div class="flex gap-4 mt-8">
+                <button onclick="closeEditModal()" id="txt-ed-cancel" class="flex-1 py-4 rounded-xl border border-white/10 text-white"></button>
+                <button onclick="saveEditedTransaction()" id="txt-ed-save" class="flex-1 py-4 rounded-xl bg-emerald-500 text-black font-bold"></button>
+            </div>
+        </div>
+    </div>
+
+    <div id="profile-modal" class="hidden fixed inset-0 bg-black/80 z-[100] items-center justify-center p-6 backdrop-blur-md">
+        <div class="bg-slate-900 text-white w-full max-w-sm p-8 rounded-[2rem] border border-white/10 modal-up">
+            <h3 id="txt-p-head" class="text-xl font-bold mb-6"></h3>
+            <input id="profile-name-input" type="text" class="w-full glass-input py-4 px-6 mb-6">
+            <div class="flex gap-4">
+                <button onclick="closeProfileModal()" id="txt-p-cancel" class="flex-1 py-4 rounded-xl border border-white/10"></button>
+                <button onclick="saveProfileName()" id="txt-p-save" class="flex-1 py-4 rounded-xl bg-cyan-500 text-black font-bold"></button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const trans = {
+            bn: {
+                pdf: "📄 PDF", incLbl: "মোট আয়", expLbl: "মোট খরচ", balLbl: "অবশিষ্ট ব্যালেন্স", chart: "এনালাইটিক্স গ্রাফ",
+                formT: "নতুন লেনদেন যোগ করুন", typeL: "ধরন", inc: "আয়", exp: "খরচ", amtPh: "পরিমাণ",
+                notePh: "নোট লিখুন", sub: "লেনদেন যোগ করুন", history: "লেনদেন ইতিহাস",
+                pHead: "আপনার নাম", cancel: "বাতিল", save: "সেভ", detHead: "বিস্তারিত",
+                del: "ডিলিট", edit: "এডিট", close: "বন্ধ", edHead: "সংশোধন করুন",
+                morning: "শুভ সকাল", afternoon: "শুভ দুপুর", evening: "শুভ সন্ধ্যা", night: "শুভ রাত্রি",
+                user: "ব্যবহারকারী", live: "লাইভ", trx: "টি লেনদেন", obosisto: "অবশিষ্ট",
+                amtLabel: "পরিমাণ (৳)", catLabel: "বিভাগ", dateLabel: "তারিখ", noteLabel: "নোট",
+                months: ["জানুয়ারি", "ফেব্রুয়ারি", "মার্চ", "এপ্রিল", "মে", "জুন", "জুলাই", "আগস্ট", "সেপ্টেম্বর", "অক্টোবর", "নভেম্বর", "ডিসেম্বর"]
+            },
+            en: {
+                pdf: "📄 PDF", incLbl: "Total Income", expLbl: "Total Expense", balLbl: "Balance", chart: "Analytics Graph",
+                formT: "Add New Entry", typeL: "Type", inc: "Income", exp: "Expense", amtPh: "Amount",
+                notePh: "Write Note", sub: "Add Entry", history: "History",
+                pHead: "Your Name", cancel: "Cancel", save: "Save", detHead: "Details",
+                del: "Delete", edit: "Edit", close: "Close", edHead: "Edit Entry",
+                morning: "Good Morning", afternoon: "Good Afternoon", evening: "Good Evening", night: "Good Night",
+                user: "User", live: "LIVE", trx: "Transactions", obosisto: "Balance",
+                amtLabel: "Amount (৳)", catLabel: "Category", dateLabel: "Date", noteLabel: "Note",
+                months: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+            }
+        };
+
+        const cats = {
+            income: [{bn:"বেতন", en:"Salary"}, {bn:"বোনাস", en:"Bonus"}, {bn:"ফ্রিল্যান্স", en:"Freelance"}, {bn:"বিনিয়োগ", en:"Investment"}, {bn:"অন্যান্য", en:"Others"}],
+            expense: [{bn:"বাজার", en:"Groceries"}, {bn:"ভাড়া", en:"Rent"}, {bn:"বিল", en:"Bills"}, {bn:"যাতায়াত", en:"Transport"}, {bn:"বিনোদন", en:"Entertainment"}, {bn:"স্বাস্থ্য", en:"Health"}, {bn:"অন্যান্য", en:"Others"}]
+        };
+
+        let transactions = JSON.parse(localStorage.getItem("transactions")) || [];
+        let currentType = 'expense', editType = 'expense', currentLang = localStorage.getItem('lang') || 'bn', currentTheme = localStorage.getItem('theme') || 'dark';
+        let myChart = null, curTrx = null;
+
+        const firebaseConfig = { apiKey: "AIzaSyAgT8Da6KcV3KVcX_oIq4bbBwMWoXgGQoE", authDomain: "sahokher-jinis.firebaseapp.com", databaseURL: "https://sahokher-jinis-default-rtdb.firebaseio.com", projectId: "sahokher-jinis", storageBucket: "sahokher-jinis.firebasestorage.app", messagingSenderId: "2153850751", appId: "1:2153850751:web:bec13835cbc88cd44a5c4a" };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        function initLiveCount() {
+            const visitorsRef = db.ref("stats/activeUsers");
+            db.ref(".info/connected").on("value", s => { if (s.val()) { const myRef = visitorsRef.push(true); myRef.onDisconnect().remove(); } });
+            visitorsRef.on("value", s => { document.getElementById('live-count').textContent = `${s.numChildren() || 0} ${trans[currentLang].live}`; });
+        }
+
+        function toggleTheme() { currentTheme = currentTheme === 'dark' ? 'light' : 'dark'; localStorage.setItem('theme', currentTheme); applyTheme(); }
+        function applyTheme() {
+            const btn = document.getElementById('theme-btn');
+            const nav = document.getElementById('navbar');
+            if (currentTheme === 'light') { document.body.classList.add('light-mode'); nav.style.background = "rgba(255,255,255,0.8)"; btn.textContent = '☀️'; } 
+            else { document.body.classList.remove('light-mode'); nav.style.background = "rgba(15,23,42,0.8)"; btn.textContent = '🌙'; }
+            if (myChart) updateChart();
+        }
+
+        function toggleLanguage() { currentLang = currentLang === 'bn' ? 'en' : 'bn'; localStorage.setItem('lang', currentLang); applyUI(); }
+        
+        function applyUI() {
+            const l = trans[currentLang];
+            document.getElementById('lang-btn').textContent = currentLang === 'bn' ? 'EN' : 'BN';
+            document.getElementById('txt-pdf').textContent = l.pdf;
+            document.getElementById('txt-inc-lbl').textContent = l.incLbl;
+            document.getElementById('txt-exp-lbl').textContent = l.expLbl;
+            document.getElementById('txt-bal-lbl').textContent = l.balLbl;
+            document.getElementById('txt-chart-lbl').textContent = l.chart;
+            document.getElementById('txt-form-title').textContent = l.formT;
+            document.getElementById('txt-type-lbl').textContent = l.typeL;
+            document.getElementById('btn-income').textContent = l.inc;
+            document.getElementById('btn-expense').textContent = l.exp;
+            document.getElementById('ed-btn-inc').textContent = l.inc;
+            document.getElementById('ed-btn-exp').textContent = l.exp;
+            
+            document.getElementById('lbl-amount').textContent = l.amtLabel;
+            document.getElementById('lbl-category').textContent = l.catLabel;
+            document.getElementById('lbl-date').textContent = l.dateLabel;
+            document.getElementById('lbl-note').textContent = l.noteLabel;
+            
+            document.getElementById('amount').placeholder = l.amtPh;
+            document.getElementById('note').placeholder = l.notePh;
+            document.getElementById('txt-submit-btn').textContent = l.sub;
+            document.getElementById('txt-history-title').textContent = l.history;
+            document.getElementById('txt-p-head').textContent = l.pHead;
+            document.getElementById('txt-p-cancel').textContent = l.cancel;
+            document.getElementById('txt-p-save').textContent = l.save;
+            document.getElementById('txt-det-head').textContent = l.detHead;
+            document.getElementById('txt-det-del').textContent = l.del;
+            document.getElementById('txt-det-edit').textContent = l.edit;
+            document.getElementById('txt-det-close').textContent = l.close;
+            document.getElementById('txt-ed-head').textContent = l.edHead;
+            document.getElementById('txt-ed-cancel').textContent = l.cancel;
+            document.getElementById('txt-ed-save').textContent = l.save;
+            document.getElementById('greeting').textContent = getGreet();
+            fillCats('category', currentType);
+            calculate();
+            renderHistory();
+        }
+
+        function getGreet() {
+            const h = new Date().getHours();
+            const l = trans[currentLang];
+            let name = localStorage.getItem('userName') || l.user;
+            let m = (h < 12) ? l.morning : (h < 16) ? l.afternoon : (h < 20) ? l.evening : l.night;
+            return `${m}, ${name}`;
+        }
+
+        function calculate() {
+            let i = 0, e = 0;
+            transactions.forEach(t => { const val = parseFloat(t.amount) || 0; t.type === 'income' ? i += val : e += val; });
+            document.getElementById("total-income").textContent = i.toLocaleString();
+            document.getElementById("total-expense").textContent = e.toLocaleString();
+            document.getElementById("current-balance").textContent = (i - e).toLocaleString();
+        }
+
+        function renderHistory() {
+            const container = document.getElementById('history-container');
+            container.innerHTML = "";
+            const monthGroups = {};
+            
+            transactions.forEach(tx => {
+                const d = new Date(tx.date);
+                const mKey = `${d.getFullYear()}-${d.getMonth()}`;
+                if (!monthGroups[mKey]) monthGroups[mKey] = { year: d.getFullYear(), month: d.getMonth(), inc: 0, exp: 0, dates: {} };
+                monthGroups[mKey].inc += (tx.type === 'income' ? parseFloat(tx.amount) : 0);
+                monthGroups[mKey].exp += (tx.type === 'expense' ? parseFloat(tx.amount) : 0);
+                const dKey = tx.date;
+                if (!monthGroups[mKey].dates[dKey]) monthGroups[mKey].dates[dKey] = { inc: 0, exp: 0, txs: [] };
+                monthGroups[mKey].dates[dKey].inc += (tx.type === 'income' ? parseFloat(tx.amount) : 0);
+                monthGroups[mKey].dates[dKey].exp += (tx.type === 'expense' ? parseFloat(tx.amount) : 0);
+                monthGroups[mKey].dates[dKey].txs.push(tx);
+            });
+
+            Object.keys(monthGroups).sort().reverse().forEach(mKey => {
+                const mg = monthGroups[mKey];
+                const section = document.createElement('div');
+                section.innerHTML = `
+                    <div onclick="document.getElementById('m-${mKey}').classList.toggle('hidden')" class="flex justify-between items-center mb-4 cursor-pointer p-4 border-b border-white/10 hover:bg-white/5 transition-all">
+                        <h2 class="text-xl font-bold text-cyan-400">${trans[currentLang].months[mg.month]} ${mg.year}</h2>
+                        <div class="text-right text-[10px] sm:text-xs">
+                            <span class="text-emerald-400 font-bold">+৳${mg.inc.toLocaleString()}</span> | 
+                            <span class="text-rose-400 font-bold">-৳${mg.exp.toLocaleString()}</span> | 
+                            <span class="text-cyan-400 font-bold">${trans[currentLang].obosisto}: ৳${(mg.inc - mg.exp).toLocaleString()}</span>
+                        </div>
+                    </div>
+                    <div id="m-${mKey}" class="hidden space-y-6">
+                        ${Object.keys(mg.dates).sort().reverse().map(dKey => {
+                            const dg = mg.dates[dKey];
+                            return `
+                                <div>
+                                    <div class="date-header">
+                                        <span class="font-bold text-sm">${dKey}</span>
+                                        <div class="flex items-center gap-2 text-[10px] sm:text-xs">
+                                            <span class="text-emerald-400 font-bold">+${dg.inc}</span>
+                                            <span class="text-rose-400 font-bold">-${dg.exp}</span>
+                                            <span class="balance-badge">= ${dg.inc - dg.exp}</span>
+                                        </div>
+                                    </div>
+                                    <div class="space-y-1 px-2">
+                                        ${dg.txs.map(tx => `
+                                            <div onclick="showTrx(${tx.id})" class="flex justify-between items-center py-3 border-b border-white/5 last:border-0 hover:bg-white/5 cursor-pointer">
+                                                <div><p class="font-bold text-sm opacity-90">${getCat(tx.category)}</p><p class="text-[10px] opacity-40">${tx.note || ''}</p></div>
+                                                <p class="font-mono font-bold ${tx.type==='income'?'text-emerald-400':'text-rose-400'}">${tx.type==='income'?'+':'-'}৳${tx.amount}</p>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                </div>`;
+                        }).join('')}
+                    </div>`;
+                container.appendChild(section);
+            });
+            updateChart();
+        }
+
+        function setType(t) { currentType = t; document.getElementById('btn-income').className = `flex-1 py-3 rounded-[1.5rem] font-bold ${t==='income'?'active-income':'bg-transparent'}`; document.getElementById('btn-expense').className = `flex-1 py-3 rounded-[1.5rem] font-bold ${t==='expense'?'active-expense':'bg-transparent'}`; fillCats('category', t); }
+        function setEditType(t) { editType = t; document.getElementById('ed-btn-inc').className = `flex-1 py-3 rounded-xl font-bold ${t==='income'?'active-income':'bg-slate-700/50'}`; document.getElementById('ed-btn-exp').className = `flex-1 py-3 rounded-xl font-bold ${t==='expense'?'active-expense':'bg-slate-700/50'}`; fillCats('ed-category', t); }
+        function fillCats(id, t) { const s = document.getElementById(id); s.innerHTML = ""; cats[t].forEach(c => { const o = document.createElement("option"); o.value = c.bn; o.textContent = c[currentLang]; s.appendChild(o); }); }
+        function addTransaction(e) { e.preventDefault(); const val = parseFloat(document.getElementById('amount').value); if(isNaN(val)) return; transactions.unshift({ id: Date.now(), type: currentType, amount: val, category: document.getElementById('category').value, date: document.getElementById('date').value || new Date().toISOString().split('T')[0], note: document.getElementById('note').value }); save(); e.target.reset(); setType(currentType); }
+        function showTrx(id) { curTrx = transactions.find(t => t.id === id); const l = trans[currentLang]; document.getElementById('modal-content').innerHTML = `<div class="space-y-4"><div><p class="text-[10px] opacity-50 uppercase">Type</p><p class="font-bold">${curTrx.type==='income'?l.inc:l.exp}</p></div><div class="flex justify-between"><div><p class="text-[10px] opacity-50 uppercase">Amount</p><p class="text-xl font-bold ${curTrx.type==='income'?'text-emerald-400':'text-rose-400'}">৳${curTrx.amount}</p></div><div><p class="text-[10px] opacity-50 uppercase">Date</p><p class="font-bold">${curTrx.date}</p></div></div><div><p class="text-[10px] opacity-50 uppercase">Note</p><p class="italic">${curTrx.note || '-'}</p></div></div>`; document.getElementById('detail-modal').classList.replace('hidden', 'flex'); }
+        function deleteCurrentTransaction() { if(confirm("Confirm Delete?")) { transactions = transactions.filter(t => t.id !== curTrx.id); save(); closeDetailModal(); } }
+        function openEditModal() { closeDetailModal(); document.getElementById('ed-amount').value = curTrx.amount; document.getElementById('ed-date').value = curTrx.date; document.getElementById('ed-note').value = curTrx.note; setEditType(curTrx.type); document.getElementById('ed-category').value = curTrx.category; document.getElementById('edit-modal').classList.replace('hidden', 'flex'); }
+        function saveEditedTransaction() { const idx = transactions.findIndex(t => t.id === curTrx.id); transactions[idx] = { ...transactions[idx], type: editType, amount: parseFloat(document.getElementById('ed-amount').value), category: document.getElementById('ed-category').value, date: document.getElementById('ed-date').value, note: document.getElementById('ed-note').value }; save(); closeEditModal(); }
+        
+        function updateChart() { if (!myChart) { const ctx = document.getElementById('expenseChart').getContext('2d'); myChart = new Chart(ctx, { type: 'line', data: { labels: [], datasets: [{ label: 'Inc', borderColor: '#10b981', data: [], tension: 0.4, fill: true, backgroundColor: 'rgba(16, 185, 129, 0.1)', borderWidth: 3 }, { label: 'Exp', borderColor: '#f43f5e', data: [], tension: 0.4, fill: true, backgroundColor: 'rgba(244, 63, 94, 0.1)', borderWidth: 3 }] }, options: { plugins: { legend: { display: false } }, scales: { y: { display: false }, x: { grid: { display: false }, ticks: { color: currentTheme==='dark'?'#475569':'#94a3b8', font: { size: 10 } } } } } }); } const last6 = []; for(let i=5; i>=0; i--) { const d = new Date(); d.setMonth(d.getMonth() - i); last6.push({ m: d.getMonth(), y: d.getFullYear(), inc: 0, exp: 0 }); } transactions.forEach(tx => { const d = new Date(tx.date); const m = last6.find(l => l.m === d.getMonth() && l.y === d.getFullYear()); if(m) tx.type === 'income' ? m.inc += parseFloat(tx.amount) : m.exp += parseFloat(tx.amount); }); myChart.data.labels = last6.map(l => trans[currentLang].months[l.m].substring(0, 3)); myChart.data.datasets[0].data = last6.map(l => l.inc); myChart.data.datasets[1].data = last6.map(l => l.exp); myChart.update(); }
+        function save() { localStorage.setItem("transactions", JSON.stringify(transactions)); applyUI(); }
+        function getCat(val) { const all = [...cats.income, ...cats.expense]; const f = all.find(c => c.bn === val || c.en === val); return f ? f[currentLang] : val; }
+        function openProfileModal() { document.getElementById('profile-name-input').value = localStorage.getItem('userName') || ''; document.getElementById('profile-modal').classList.replace('hidden', 'flex'); }
+        function closeProfileModal() { document.getElementById('profile-modal').classList.replace('flex', 'hidden'); }
+        function saveProfileName() { const n = document.getElementById('profile-name-input').value.trim(); if(n) localStorage.setItem('userName', n); closeProfileModal(); applyUI(); }
+        function closeDetailModal() { document.getElementById('detail-modal').classList.replace('flex', 'hidden'); }
+        function closeEditModal() { document.getElementById('edit-modal').classList.replace('flex', 'hidden'); }
+
+        // PDF FIX - High Visibility Design
+        function exportToPDF() {
+            const pdfRoot = document.createElement('div');
+            pdfRoot.style.cssText = "padding:40px; color:#000; background:#fff; width:750px;";
+
+            let totalIn = 0, totalEx = 0;
+            transactions.forEach(t => { 
+                const v = parseFloat(t.amount) || 0;
+                t.type === 'income' ? totalIn += v : totalEx += v;
+            });
+
+            pdfRoot.innerHTML = `
+                <div style="text-align:center; color:#22d3ee; font-size:26px; font-weight:bold; margin-bottom:20px;">Expense Tracker Report</div>
+                <div style="display:flex; justify-content:space-between; background:#f1f5f9; padding:20px; border-radius:15px; margin-bottom:30px; font-size:16px;">
+                    <div>Income: <b style="color:green">৳${totalIn.toLocaleString()}</b></div>
+                    <div>Expense: <b style="color:red">৳${totalEx.toLocaleString()}</b></div>
+                    <div>Balance: <b style="color:blue">৳${(totalIn - totalEx).toLocaleString()}</b></div>
+                </div>
+                <table style="width:100%; border-collapse:collapse; font-size:14px;">
+                    <thead>
+                        <tr style="background:#f1f5f9; text-align:left;">
+                            <th style="padding:12px; border-bottom:2px solid #ddd;">Date</th>
+                            <th style="padding:12px; border-bottom:2px solid #ddd;">Category</th>
+                            <th style="padding:12px; border-bottom:2px solid #ddd;">Note</th>
+                            <th style="padding:12px; border-bottom:2px solid #ddd; text-align:right;">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${transactions.map(t => `
+                            <tr style="border-bottom:1px solid #eee;">
+                                <td style="padding:12px;">${t.date}</td>
+                                <td style="padding:12px;">${getCat(t.category)}</td>
+                                <td style="padding:12px; color:#666;">${t.note || '-'}</td>
+                                <td style="padding:12px; text-align:right; font-weight:bold; color:${t.type==='income'?'#10b981':'#f43f5e'};">
+                                    ${t.type==='income'?'+':'-'}৳${parseFloat(t.amount).toLocaleString()}
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+
+            const opt = {
+                margin: 10,
+                filename: 'Report.pdf',
+                html2canvas: { scale: 2, useCORS: true },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+            html2pdf().from(pdfRoot).set(opt).save();
+        }
+
+        window.onload = () => { initLiveCount(); applyTheme(); applyUI(); setType('expense'); };
+    </script>
+</body>
+</html>
