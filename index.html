@@ -25,12 +25,18 @@
         /* Summary Card Style exactly like screenshot */
         .summary-card {
             background: rgba(30, 41, 59, 0.4);
-            border-radius: 2.5rem;
-            padding: 1.5rem 2rem;
+            border-radius: 1.5rem;
+            padding: 0.75rem 0.5rem;
             border: 2px solid transparent;
             display: flex;
             flex-direction: column;
             justify-content: center;
+        }
+        @media (min-width: 640px) {
+            .summary-card {
+                border-radius: 2.5rem;
+                padding: 1.5rem 2rem;
+            }
         }
         body.light-mode .summary-card { background: white; border-color: #e2e8f0; border-width: 1px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
 
@@ -88,25 +94,33 @@
     <div class="max-w-4xl mx-auto px-6 pt-8">
         <h2 id="greeting" class="text-2xl font-bold mb-8"></h2>
 
-        <!-- Summary -->
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-10">
-            <div class="summary-card card-income">
-                <p id="txt-inc-lbl" class="text-[11px] font-bold opacity-70 uppercase tracking-widest mb-1"></p>
-                <p class="text-4xl font-bold">৳<span id="total-income">0</span></p>
+        <!-- Summary: Rendered in 3 Columns (One Row) on Mobile -->
+        <div class="grid grid-cols-3 gap-2 sm:gap-6 mb-10">
+            <div class="summary-card card-income text-center sm:text-left">
+                <p id="txt-inc-lbl" class="text-[9px] sm:text-[11px] font-bold opacity-70 uppercase tracking-widest mb-1"></p>
+                <p class="text-sm sm:text-4xl font-bold">৳<span id="total-income">0</span></p>
             </div>
-            <div class="summary-card card-expense">
-                <p id="txt-exp-lbl" class="text-[11px] font-bold opacity-70 uppercase tracking-widest mb-1"></p>
-                <p class="text-4xl font-bold">৳<span id="total-expense">0</span></p>
+            <div class="summary-card card-expense text-center sm:text-left">
+                <p id="txt-exp-lbl" class="text-[9px] sm:text-[11px] font-bold opacity-70 uppercase tracking-widest mb-1"></p>
+                <p class="text-sm sm:text-4xl font-bold">৳<span id="total-expense">0</span></p>
             </div>
-            <div class="summary-card card-balance">
-                <p id="txt-bal-lbl" class="text-[11px] font-bold opacity-70 uppercase tracking-widest mb-1"></p>
-                <p class="text-4xl font-bold">৳<span id="current-balance">0</span></p>
+            <div class="summary-card card-balance text-center sm:text-left">
+                <p id="txt-bal-lbl" class="text-[9px] sm:text-[11px] font-bold opacity-70 uppercase tracking-widest mb-1"></p>
+                <p class="text-sm sm:text-4xl font-bold">৳<span id="current-balance">0</span></p>
             </div>
         </div>
 
-        <div class="glass-card p-6 mb-10">
-            <h3 id="txt-chart-lbl" class="text-sm font-bold mb-4 opacity-50 uppercase tracking-widest"></h3>
-            <canvas id="expenseChart" height="140"></canvas>
+        <div class="glass-card p-6 mb-10 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+                <h3 id="txt-chart-lbl" class="text-sm font-bold mb-4 opacity-50 uppercase tracking-widest"></h3>
+                <canvas id="expenseChart" height="140"></canvas>
+            </div>
+            <div>
+                <h3 id="txt-pie-lbl" class="text-sm font-bold mb-4 opacity-50 uppercase tracking-widest"></h3>
+                <div class="h-[140px] flex items-center justify-center">
+                    <canvas id="pieChart"></canvas>
+                </div>
+            </div>
         </div>
 
         <!-- Add Transaction Form -->
@@ -195,7 +209,7 @@
     <script>
         const trans = {
             bn: {
-                pdf: "📄 PDF", incLbl: "মোট আয়", expLbl: "মোট খরচ", balLbl: "অবশিষ্ট ব্যালেন্স", chart: "এনালাইটিক্স গ্রাফ",
+                pdf: "📄 PDF", incLbl: "মোট আয়", expLbl: "মোট খরচ", balLbl: "অবশিষ্ট ব্যালেন্স", chart: "এনালাইটিক্স গ্রাফ", pieLbl: "বিভাগ ভিত্তিক বণ্টন",
                 formT: "নতুন লেনদেন যোগ করুন", typeL: "ধরন", inc: "আয়", exp: "খরচ", amtPh: "পরিমাণ",
                 notePh: "নোট লিখুন", sub: "লেনদেন যোগ করুন", history: "লেনদেন ইতিহাস",
                 pHead: "আপনার নাম", cancel: "বাতিল", save: "সেভ", detHead: "বিস্তারিত",
@@ -206,7 +220,7 @@
                 months: ["জানুয়ারি", "ফেব্রুয়ারি", "মার্চ", "এপ্রিল", "মে", "জুন", "জুলাই", "আগস্ট", "সেপ্টেম্বর", "অক্টোবর", "নভেম্বর", "ডিসেম্বর"]
             },
             en: {
-                pdf: "📄 PDF", incLbl: "Total Income", expLbl: "Total Expense", balLbl: "Balance", chart: "Analytics Graph",
+                pdf: "📄 PDF", incLbl: "Total Income", expLbl: "Total Expense", balLbl: "Balance", chart: "Analytics Graph", pieLbl: "Category Breakdown",
                 formT: "Add New Entry", typeL: "Type", inc: "Income", exp: "Expense", amtPh: "Amount",
                 notePh: "Write Note", sub: "Add Entry", history: "History",
                 pHead: "Your Name", cancel: "Cancel", save: "Save", detHead: "Details",
@@ -219,13 +233,27 @@
         };
 
         const cats = {
-            income: [{bn:"বেতন", en:"Salary"}, {bn:"বোনাস", en:"Bonus"}, {bn:"ফ্রিল্যান্স", en:"Freelance"}, {bn:"বিনিয়োগ", en:"Investment"}, {bn:"অন্যান্য", en:"Others"}],
-            expense: [{bn:"বাজার", en:"Groceries"}, {bn:"ভাড়া", en:"Rent"}, {bn:"বিল", en:"Bills"}, {bn:"যাতায়াত", en:"Transport"}, {bn:"বিনোদন", en:"Entertainment"}, {bn:"স্বাস্থ্য", en:"Health"}, {bn:"অন্যান্য", en:"Others"}]
+            income: [
+                {bn:"বেতন", en:"Salary", icon:"💼"}, 
+                {bn:"বোনাস", en:"Bonus", icon:"🎁"}, 
+                {bn:"ফ্রিল্যান্স", en:"Freelance", icon:"💻"}, 
+                {bn:"বিনিয়োগ", en:"Investment", icon:"📈"}, 
+                {bn:"অন্যান্য", en:"Others", icon:"🪙"}
+            ],
+            expense: [
+                {bn:"বাজার", en:"Groceries", icon:"🛒"}, 
+                {bn:"ভাড়া", en:"Rent", icon:"🏠"}, 
+                {bn:"বিল", en:"Bills", icon:"⚡"}, 
+                {bn:"যাতায়াত", en:"Transport", icon:"🚗"}, 
+                {bn:"বিনোদন", en:"Entertainment", icon:"🎬"}, 
+                {bn:"স্বাস্থ্য", en:"Health", icon:"🏥"}, 
+                {bn:"অন্যান্য", en:"Others", icon:"💸"}
+            ]
         };
 
         let transactions = JSON.parse(localStorage.getItem("transactions")) || [];
         let currentType = 'expense', editType = 'expense', currentLang = localStorage.getItem('lang') || 'bn', currentTheme = localStorage.getItem('theme') || 'dark';
-        let myChart = null, curTrx = null;
+        let myChart = null, myPieChart = null, curTrx = null;
 
         const firebaseConfig = { apiKey: "AIzaSyAgT8Da6KcV3KVcX_oIq4bbBwMWoXgGQoE", authDomain: "sahokher-jinis.firebaseapp.com", databaseURL: "https://sahokher-jinis-default-rtdb.firebaseio.com", projectId: "sahokher-jinis", storageBucket: "sahokher-jinis.firebasestorage.app", messagingSenderId: "2153850751", appId: "1:2153850751:web:bec13835cbc88cd44a5c4a" };
         firebase.initializeApp(firebaseConfig);
@@ -256,6 +284,7 @@
             document.getElementById('txt-exp-lbl').textContent = l.expLbl;
             document.getElementById('txt-bal-lbl').textContent = l.balLbl;
             document.getElementById('txt-chart-lbl').textContent = l.chart;
+            document.getElementById('txt-pie-lbl').textContent = l.pieLbl;
             document.getElementById('txt-form-title').textContent = l.formT;
             document.getElementById('txt-type-lbl').textContent = l.typeL;
             document.getElementById('btn-income').textContent = l.inc;
@@ -339,7 +368,7 @@
                             const dg = mg.dates[dKey];
                             return `
                                 <div>
-                                    <div class="date-header">
+                                    <div onclick="document.getElementById('d-${mKey}-${dKey}').classList.toggle('hidden')" class="date-header cursor-pointer hover:bg-white/5 transition-all">
                                         <span class="font-bold text-sm">${dKey}</span>
                                         <div class="flex items-center gap-2 text-[10px] sm:text-xs">
                                             <span class="text-emerald-400 font-bold">+${dg.inc}</span>
@@ -347,9 +376,16 @@
                                             <span class="balance-badge">= ${dg.inc - dg.exp}</span>
                                         </div>
                                     </div>
-                                    <div class="space-y-1 px-2">
+                                    <div id="d-${mKey}-${dKey}" class="hidden space-y-1 px-2 pb-4">
+                                        <!-- Specific Date sectors & totals breakdown -->
+                                        <div class="p-3 bg-slate-900/40 rounded-xl mb-2 text-xs flex flex-wrap gap-4 border border-white/5">
+                                            <span class="text-emerald-400"><strong>${trans[currentLang].incLbl}:</strong> ৳${dg.inc.toLocaleString()}</span>
+                                            <span class="text-rose-400"><strong>${trans[currentLang].expLbl}:</strong> ৳${dg.exp.toLocaleString()}</span>
+                                            <span class="text-cyan-400"><strong>${trans[currentLang].balLbl}:</strong> ৳${(dg.inc - dg.exp).toLocaleString()}</span>
+                                        </div>
+                                        <!-- Transactions List -->
                                         ${dg.txs.map(tx => `
-                                            <div onclick="showTrx(${tx.id})" class="flex justify-between items-center py-3 border-b border-white/5 last:border-0 hover:bg-white/5 cursor-pointer">
+                                            <div onclick="showTrx(${tx.id}); event.stopPropagation();" class="flex justify-between items-center py-3 border-b border-white/5 last:border-0 hover:bg-white/5 cursor-pointer">
                                                 <div><p class="font-bold text-sm opacity-90">${getCat(tx.category)}</p><p class="text-[10px] opacity-40">${tx.note || ''}</p></div>
                                                 <p class="font-mono font-bold ${tx.type==='income'?'text-emerald-400':'text-rose-400'}">${tx.type==='income'?'+':'-'}৳${tx.amount}</p>
                                             </div>
@@ -365,16 +401,145 @@
 
         function setType(t) { currentType = t; document.getElementById('btn-income').className = `flex-1 py-3 rounded-[1.5rem] font-bold ${t==='income'?'active-income':'bg-transparent'}`; document.getElementById('btn-expense').className = `flex-1 py-3 rounded-[1.5rem] font-bold ${t==='expense'?'active-expense':'bg-transparent'}`; fillCats('category', t); }
         function setEditType(t) { editType = t; document.getElementById('ed-btn-inc').className = `flex-1 py-3 rounded-xl font-bold ${t==='income'?'active-income':'bg-slate-700/50'}`; document.getElementById('ed-btn-exp').className = `flex-1 py-3 rounded-xl font-bold ${t==='expense'?'active-expense':'bg-slate-700/50'}`; fillCats('ed-category', t); }
-        function fillCats(id, t) { const s = document.getElementById(id); s.innerHTML = ""; cats[t].forEach(c => { const o = document.createElement("option"); o.value = c.bn; o.textContent = c[currentLang]; s.appendChild(o); }); }
+        function fillCats(id, t) { const s = document.getElementById(id); s.innerHTML = ""; cats[t].forEach(c => { const o = document.createElement("option"); o.value = c.bn; o.textContent = `${c.icon} ${c[currentLang]}`; s.appendChild(o); }); }
         function addTransaction(e) { e.preventDefault(); const val = parseFloat(document.getElementById('amount').value); if(isNaN(val)) return; transactions.unshift({ id: Date.now(), type: currentType, amount: val, category: document.getElementById('category').value, date: document.getElementById('date').value || new Date().toISOString().split('T')[0], note: document.getElementById('note').value }); save(); e.target.reset(); setType(currentType); }
         function showTrx(id) { curTrx = transactions.find(t => t.id === id); const l = trans[currentLang]; document.getElementById('modal-content').innerHTML = `<div class="space-y-4"><div><p class="text-[10px] opacity-50 uppercase">Type</p><p class="font-bold">${curTrx.type==='income'?l.inc:l.exp}</p></div><div class="flex justify-between"><div><p class="text-[10px] opacity-50 uppercase">Amount</p><p class="text-xl font-bold ${curTrx.type==='income'?'text-emerald-400':'text-rose-400'}">৳${curTrx.amount}</p></div><div><p class="text-[10px] opacity-50 uppercase">Date</p><p class="font-bold">${curTrx.date}</p></div></div><div><p class="text-[10px] opacity-50 uppercase">Note</p><p class="italic">${curTrx.note || '-'}</p></div></div>`; document.getElementById('detail-modal').classList.replace('hidden', 'flex'); }
         function deleteCurrentTransaction() { if(confirm("Confirm Delete?")) { transactions = transactions.filter(t => t.id !== curTrx.id); save(); closeDetailModal(); } }
         function openEditModal() { closeDetailModal(); document.getElementById('ed-amount').value = curTrx.amount; document.getElementById('ed-date').value = curTrx.date; document.getElementById('ed-note').value = curTrx.note; setEditType(curTrx.type); document.getElementById('ed-category').value = curTrx.category; document.getElementById('edit-modal').classList.replace('hidden', 'flex'); }
         function saveEditedTransaction() { const idx = transactions.findIndex(t => t.id === curTrx.id); transactions[idx] = { ...transactions[idx], type: editType, amount: parseFloat(document.getElementById('ed-amount').value), category: document.getElementById('ed-category').value, date: document.getElementById('ed-date').value, note: document.getElementById('ed-note').value }; save(); closeEditModal(); }
         
-        function updateChart() { if (!myChart) { const ctx = document.getElementById('expenseChart').getContext('2d'); myChart = new Chart(ctx, { type: 'line', data: { labels: [], datasets: [{ label: 'Inc', borderColor: '#10b981', data: [], tension: 0.4, fill: true, backgroundColor: 'rgba(16, 185, 129, 0.1)', borderWidth: 3 }, { label: 'Exp', borderColor: '#f43f5e', data: [], tension: 0.4, fill: true, backgroundColor: 'rgba(244, 63, 94, 0.1)', borderWidth: 3 }] }, options: { plugins: { legend: { display: false } }, scales: { y: { display: false }, x: { grid: { display: false }, ticks: { color: currentTheme==='dark'?'#475569':'#94a3b8', font: { size: 10 } } } } } }); } const last6 = []; for(let i=5; i>=0; i--) { const d = new Date(); d.setMonth(d.getMonth() - i); last6.push({ m: d.getMonth(), y: d.getFullYear(), inc: 0, exp: 0 }); } transactions.forEach(tx => { const d = new Date(tx.date); const m = last6.find(l => l.m === d.getMonth() && l.y === d.getFullYear()); if(m) tx.type === 'income' ? m.inc += parseFloat(tx.amount) : m.exp += parseFloat(tx.amount); }); myChart.data.labels = last6.map(l => trans[currentLang].months[l.m].substring(0, 3)); myChart.data.datasets[0].data = last6.map(l => l.inc); myChart.data.datasets[1].data = last6.map(l => l.exp); myChart.update(); }
+        function updateChart() { 
+            const ctx = document.getElementById('expenseChart').getContext('2d'); 
+            
+            // Futuristic Gradient Definitions
+            const incGrad = ctx.createLinearGradient(0, 0, 0, 140);
+            incGrad.addColorStop(0, 'rgba(34, 211, 238, 0.45)');
+            incGrad.addColorStop(1, 'rgba(34, 211, 238, 0)');
+            
+            const expGrad = ctx.createLinearGradient(0, 0, 0, 140);
+            expGrad.addColorStop(0, 'rgba(244, 63, 94, 0.45)');
+            expGrad.addColorStop(1, 'rgba(244, 63, 94, 0)');
+
+            if (!myChart) { 
+                myChart = new Chart(ctx, { 
+                    type: 'line', 
+                    data: { 
+                        labels: [], 
+                        datasets: [
+                            { 
+                                label: 'Inc', 
+                                borderColor: '#22d3ee', // Futuristic Neon Cyan
+                                data: [], 
+                                tension: 0.45, 
+                                fill: true, 
+                                backgroundColor: incGrad, 
+                                borderWidth: 3.5,
+                                pointBackgroundColor: '#22d3ee',
+                                pointHoverRadius: 6,
+                                pointRadius: 1.5
+                            }, 
+                            { 
+                                label: 'Exp', 
+                                borderColor: '#f43f5e', // Futuristic Neon Hot Pink
+                                data: [], 
+                                tension: 0.45, 
+                                fill: true, 
+                                backgroundColor: expGrad, 
+                                borderWidth: 3.5,
+                                pointBackgroundColor: '#f43f5e',
+                                pointHoverRadius: 6,
+                                pointRadius: 1.5
+                            }
+                        ] 
+                    }, 
+                    options: { 
+                        plugins: { legend: { display: false } }, 
+                        scales: { 
+                            y: { display: false }, 
+                            x: { 
+                                grid: { display: false }, 
+                                ticks: { color: currentTheme==='dark'?'#475569':'#94a3b8', font: { size: 10, weight: 'bold' } } 
+                            } 
+                        } 
+                    } 
+                }); 
+            } 
+            const last6 = []; 
+            for(let i=5; i>=0; i--) { const d = new Date(); d.setMonth(d.getMonth() - i); last6.push({ m: d.getMonth(), y: d.getFullYear(), inc: 0, exp: 0 }); } 
+            transactions.forEach(tx => { const d = new Date(tx.date); const m = last6.find(l => l.m === d.getMonth() && l.y === d.getFullYear()); if(m) tx.type === 'income' ? m.inc += parseFloat(tx.amount) : m.exp += parseFloat(tx.amount); }); 
+            myChart.data.labels = last6.map(l => trans[currentLang].months[l.m].substring(0, 3)); 
+            myChart.data.datasets[0].data = last6.map(l => l.inc); 
+            myChart.data.datasets[1].data = last6.map(l => l.exp); 
+            myChart.update(); 
+
+            // Dynamic Futuristic Doughnut Console (Pie) Chart
+            const sectorData = {};
+            let grandTotal = 0;
+            transactions.forEach(tx => {
+                const categoryLabel = getCat(tx.category);
+                const val = parseFloat(tx.amount) || 0;
+                sectorData[categoryLabel] = (sectorData[categoryLabel] || 0) + val;
+                grandTotal += val;
+            });
+
+            const pieLabels = [];
+            const pieValues = [];
+            Object.keys(sectorData).forEach(cat => {
+                const percentage = grandTotal > 0 ? ((sectorData[cat] / grandTotal) * 100).toFixed(1) : 0;
+                pieLabels.push(`${cat} (${percentage}%)`);
+                pieValues.push(sectorData[cat]);
+            });
+
+            if (!myPieChart) {
+                const pieCtx = document.getElementById('pieChart').getContext('2d');
+                myPieChart = new Chart(pieCtx, {
+                    type: 'doughnut', 
+                    data: {
+                        labels: pieLabels,
+                        datasets: [{
+                            data: pieValues,
+                            backgroundColor: [
+                                '#22d3ee', // Neon Cyan
+                                '#a855f7', // Electric Purple
+                                '#10b981', // Lime Neon
+                                '#f43f5e', // Hot Pink
+                                '#f59e0b', // Neon Amber
+                                '#3b82f6', // Cyber Blue
+                                '#ec4899', // Magenta
+                                '#14b8a6', // Teal
+                                '#475569'  
+                            ],
+                            borderWidth: 0,
+                            borderRadius: 6,
+                            spacing: 5,
+                            cutout: '72%'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    color: currentTheme === 'dark' ? '#cbd5e1' : '#1e293b',
+                                    font: { size: 9, weight: '600' },
+                                    boxWidth: 8,
+                                    padding: 8
+                                }
+                            }
+                        }
+                    }
+                });
+            } else {
+                myPieChart.data.labels = pieLabels;
+                myPieChart.data.datasets[0].data = pieValues;
+                myPieChart.options.plugins.legend.labels.color = currentTheme === 'dark' ? '#cbd5e1' : '#1e293b';
+                myPieChart.update();
+            }
+        }
         function save() { localStorage.setItem("transactions", JSON.stringify(transactions)); applyUI(); }
-        function getCat(val) { const all = [...cats.income, ...cats.expense]; const f = all.find(c => c.bn === val || c.en === val); return f ? f[currentLang] : val; }
+        function getCat(val) { const all = [...cats.income, ...cats.expense]; const f = all.find(c => c.bn === val || c.en === val); return f ? `${f.icon} ${f[currentLang]}` : val; }
         function openProfileModal() { document.getElementById('profile-name-input').value = localStorage.getItem('userName') || ''; document.getElementById('profile-modal').classList.replace('hidden', 'flex'); }
         function closeProfileModal() { document.getElementById('profile-modal').classList.replace('flex', 'hidden'); }
         function saveProfileName() { const n = document.getElementById('profile-name-input').value.trim(); if(n) localStorage.setItem('userName', n); closeProfileModal(); applyUI(); }
